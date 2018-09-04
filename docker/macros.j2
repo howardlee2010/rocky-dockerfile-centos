@@ -1,0 +1,100 @@
+{% macro install_packages(packages) -%}
+{% if packages is defined and packages|length > 0 -%}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] -%}
+        RUN yum -y install {{ packages | join(' ') }} && yum clean all && rm -rf /var/cache/yum
+    {%- elif base_distro in ['debian', 'ubuntu'] -%}
+        {#-
+          debian_package_install is a utility method to build up an appropriate
+          set of commands to install packages in a debian-based environment that
+          may include URL links to a .deb package
+        -#}
+        RUN {{ debian_package_install(packages) }}
+    {%- endif %}
+{%- endif %}
+{%- endmacro %}
+
+{% macro sed(file='', expressions=[]) -%}
+{% if file != '' and expressions|length >0 %}
+    RUN {% for expression in expressions %} sed -i "{{ file }}" -e "{{ expression }}" {% if not loop.last %} && {% endif %} {% endfor %}
+{% else %}
+    RUN echo "file and expressions must be set to use the sed macro"; /bin/false
+{% endif %}
+{%- endmacro %}
+
+{% macro install_pip(packages, constraints = true) %}
+{%- if packages is sequence and packages|length > 0 -%}
+    pip --no-cache-dir install --upgrade{{ ' ' }}
+    {%- if constraints %}-c /requirements/upper-constraints.txt {% endif -%}
+    {{ packages | join(' ') }}
+{%- else -%}
+    true
+{%- endif -%}
+{% endmacro %}
+
+{% macro configure_user(name, groups=None, shell=None, homedir=None) %}
+{% set user=users[name] %}
+{%- if not homedir %}
+{% set homedir='/var/lib/' + name %}
+{%- endif %}
+RUN usermod --append --home {{ homedir }} --groups kolla {{ name }} \
+    {%- if groups %}
+    && usermod --append --groups {{ groups }} {{ name }} \
+    {%- endif %}
+    {%- if shell %}
+    && chsh --shell {{ shell }} {{ name }} \
+    {%- endif %}
+    && mkdir -p {{ homedir }} \
+    && chown -R {{ user.uid }}:{{ user.gid }} {{ homedir }}
+{% endmacro %}
+
+{% macro debian_fix_existing_user(package, lines) %}
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends {{ package }} \
+    || sed -i '/adduser/,+{{ lines }} d' /var/lib/dpkg/info/{{ package }}.postinst \
+    && echo "configuring packages" \
+    && dpkg --configure -a \
+    && echo "done" \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+{% endmacro %}
+
+{% macro debian_haproxy_existing_user_fix() %}
+{# NOTE(SamYaple): The postinst script breaks if the user 'haproxy' already exists #}
+    {{ debian_fix_existing_user('haproxy', 1) }}
+{% endmacro %}
+
+{% macro debian_mongodb_existing_user_fix() %}
+{# NOTE(hrw): The postinst script breaks if the user 'mongodb' already exists #}
+{# TODO(hrw): Version in Debian 'testing' checks does user exists #}
+    {{ debian_fix_existing_user('mongodb-server', 3) }}
+{% endmacro %}
+
+{% macro debian_opendaylight_existing_user_fix() %}
+{# NOTE(egonzalez): The postinst script breaks if the user 'odl' already exists #}
+    {{ debian_fix_existing_user('opendaylight', 1) }}
+{% endmacro %}
+
+{% macro install_kubectl() %}
+    {% if base_arch == 'x86_64' %}
+        ENV KUBE_ARCH=amd64
+    {% elif base_arch == 'aarch64' %}
+        ENV KUBE_ARCH=arm64
+    {% else %}
+        RUN echo 'There is no "kubectl" binary for {{ base_arch }}' \
+            && /bin/false
+    {% endif %}
+
+    RUN curl -o /usr/bin/kubectl http://storage.googleapis.com/kubernetes-release/release/v1.5.4/bin/linux/${KUBE_ARCH}/kubectl \
+        && chmod 755 /usr/bin/kubectl
+{% endmacro %}
+
+
+{% macro install_fluent_plugins(plugins) -%}
+{% if plugins is defined and plugins|length > 0 -%}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] -%}
+        RUN ulimit -n 65536 && gem install --minimal-deps {{ plugins | join(' ') }}
+    {%- elif base_distro in ['debian', 'ubuntu'] -%}
+        RUN ulimit -n 65536 && td-agent-gem install {{ plugins | join(' ') }}
+    {%- endif %}
+{%- endif %}
+{%- endmacro %}

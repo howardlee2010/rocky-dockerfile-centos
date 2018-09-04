@@ -1,0 +1,110 @@
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block kolla_toolbox_header %}{% endblock %}
+
+{% set virtualenv_path='/opt/ansible' %}
+{% set os_client_config= virtualenv_path + '/lib/python2.7/site-packages/os_client_config/defaults.json' %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='ansible') }}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set kolla_toolbox_packages = [
+        'crudini',
+        'gcc',
+        'gdisk',
+        'git',
+        'jq',
+        'libffi-devel',
+        'libxml2-devel',
+        'libxslt-devel',
+        'make',
+        'mariadb',
+        'mariadb-devel',
+        'openssh-clients',
+        'openssl-devel',
+        'python-devel'
+     ] %}
+
+{% elif base_distro in ['debian', 'ubuntu'] %}
+    {% set kolla_toolbox_packages = [
+        'build-essential',
+        'ca-certificates',
+        'crudini',
+        'gdisk',
+        'git',
+        'jq',
+        'libffi-dev',
+        'libssl-dev',
+        'libxslt1-dev',
+        'mariadb-client',
+        'python-dev'
+     ] %}
+
+    {% if base_arch == 'aarch64' and base_distro == 'ubuntu' %}
+         {% set kolla_toolbox_packages = kolla_toolbox_packages + [
+             'libmysqlclient-dev'
+         ] %}
+    {% else %}
+         {% set kolla_toolbox_packages = kolla_toolbox_packages + [
+             'libmariadbclient-dev'
+         ] %}
+    {% endif %}
+    # Debian/stretch ships libmysqlclient.so in separate package
+    {% if base_distro == 'debian' %}
+        {% set kolla_toolbox_packages = kolla_toolbox_packages + [
+            'libmariadbclient-dev-compat'
+        ] %}
+    {% endif %}
+
+{% endif %}
+{{ macros.install_packages(kolla_toolbox_packages | customizable("packages")) }}
+
+{% block kolla_toolbox_source_install_python_pip %}
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
+    && python get-pip.py \
+    && rm get-pip.py
+{% endblock %}
+
+{% set kolla_toolbox_pip_virtualenv_packages = [
+        'virtualenv'
+    ] %}
+
+RUN {{ macros.install_pip(kolla_toolbox_pip_virtualenv_packages|customizable("pip_packages"), constraints=false) }} \
+    && virtualenv --system-site-packages {{ virtualenv_path }}
+
+ENV PATH {{ virtualenv_path }}/bin:$PATH
+
+{% set kolla_toolbox_pip_packages = [
+        'ansible==2.2.0.0',
+        '"cmd2<0.9.0"',
+        'influxdb',
+        'MySQL-python',
+        'os-client-config==1.29.0',
+        'pbr==4.0.0',
+        'pymongo',
+        'python-openstackclient==3.14.0',
+        'pytz',
+        'pyudev',
+        'shade==1.27.1'
+    ] %}
+
+RUN {{ macros.install_pip(kolla_toolbox_pip_packages | customizable("pip_packages"), constraints=false) }} \
+    && mkdir -p /etc/ansible /usr/share/ansible \
+    && echo 'localhost ansible_connection=local ansible_python_interpreter={{ virtualenv_path }}/bin/python' > /etc/ansible/hosts \
+    && sed -i 's|  "identity_api_version": "2.0",|  "identity_api_version": "3",|' {{ os_client_config }}
+
+ENV ANSIBLE_LIBRARY /usr/share/ansible:$ANSIBLE_LIBRARY
+
+COPY find_disks.py kolla_keystone_service.py kolla_keystone_user.py kolla_sanity.py /usr/share/ansible/
+COPY ansible.cfg /var/lib/ansible/.ansible.cfg
+
+COPY ansible_sudoers /etc/sudoers.d/kolla_ansible_sudoers
+RUN chmod 440 /etc/sudoers.d/kolla_ansible_sudoers
+
+{% block kolla_toolbox_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER ansible

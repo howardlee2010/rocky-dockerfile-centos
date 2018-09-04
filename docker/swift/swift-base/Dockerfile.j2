@@ -1,0 +1,59 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block swift_base_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='swift') }}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set swift_base_packages = [
+                'openstack-swift',
+                'nmap-ncat'
+            ]
+        %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set swift_base_packages = [
+                'swift',
+                'netcat-openbsd'
+             ]
+        %}
+    {% endif %}
+
+{{ macros.install_packages(swift_base_packages | customizable("packages")) }}
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set swift_base_packages = ['liberasurecode-devel','nmap-ncat'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set swift_base_packages = ['liberasurecode-dev','netcat-openbsd'] %}
+    {% endif %}
+
+{{ macros.install_packages(swift_base_packages | customizable("packages")) }}
+
+ADD swift-base-archive /swift-base-source
+
+{% set swift_base_pip_packages = [
+    '/swift'
+] %}
+
+RUN ln -s swift-base-source/* swift \
+    && {{ macros.install_pip(swift_base_pip_packages | customizable("pip_packages")) }} \
+    && mkdir -p /etc/swift /var/cache/swift \
+    && cp -r /swift/etc/* /etc/swift/ \
+    && chown -R swift: /etc/swift /var/cache/swift
+{% endif %}
+
+COPY swift-rootwrap /var/lib/kolla/venv/bin/swift-rootwrap
+COPY rootwrap.conf /etc/swift/rootwrap.conf
+COPY swift_sudoers /etc/sudoers.d/kolla_swift_sudoers
+
+RUN chmod 755 /var/lib/kolla/venv/bin/swift-rootwrap \
+    && chmod 644 /etc/swift/rootwrap.conf \
+    && sed -i 's|^exec_dirs.*|exec_dirs=/var/lib/kolla/venv/bin,/sbin,/usr/sbin,/bin,/usr/bin,/usr/local/bin,/usr/local/sbin|g' /etc/swift/rootwrap.conf \
+    && chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/kolla_swift_sudoers \
+    && mkdir -p /opt/swift
+
+{% block swift_base_footer %}{% endblock %}

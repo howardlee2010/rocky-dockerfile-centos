@@ -1,0 +1,64 @@
+FROM {{ namespace }}/{{ image_prefix }}ironic-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block ironic_pxe_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set ironic_pxe_packages = [
+        'httpd',
+        'ipxe-bootimgs',
+        'mod_ssl',
+        'mod_wsgi',
+        'tftp-server'
+    ] %}
+
+    {% if base_arch == 'x86_64' %}
+        {% set ironic_pxe_packages = ironic_pxe_packages + [
+            'syslinux-tftpboot'
+        ] %}
+    {% endif %}
+
+    {% if base_arch == 'aarch64' %}
+ENV ironic_arch=aarch64
+        {% set ironic_pxe_packages = ironic_pxe_packages + [
+            'grub2-efi',
+            'grub2-efi-aa64-modules'
+        ] %}
+    {% endif %}
+
+{{ macros.install_packages(ironic_pxe_packages | customizable("packages")) }}
+RUN sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
+    && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
+{% elif base_distro in ['debian', 'ubuntu'] %}
+    {% set ironic_pxe_packages = [
+        'apache2',
+        'ipxe',
+        'libapache2-mod-wsgi',
+        'pxelinux',
+        'syslinux-common',
+        'tftpd-hpa'
+    ] %}
+
+    {% if base_arch == 'x86_64' %}
+        {% set ironic_pxe_packages = ironic_pxe_packages + [
+            'syslinux'
+        ] %}
+    {% elif base_arch == 'aarch64' %}
+ENV ironic_arch=aarch64
+        {% set ironic_pxe_packages = ironic_pxe_packages + [
+            'grub-efi-arm64'
+        ] %}
+    {% endif %}
+
+{{ macros.install_packages(ironic_pxe_packages | customizable("packages")) }}
+RUN echo > /etc/apache2/ports.conf
+{% endif %}
+
+COPY tftp-map-file /map-file
+COPY extend_start.sh /usr/local/bin/kolla_ironic_extend_start
+RUN chmod 755 /usr/local/bin/kolla_ironic_extend_start
+
+{% block ironic_pxe_footer %}{% endblock %}
+{% block footer %}{% endblock %}

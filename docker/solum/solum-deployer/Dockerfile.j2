@@ -1,0 +1,16 @@
+FROM {{ namespace }}/{{ image_prefix }}solum-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block solum_deployer_header %}{% endblock %}
+
+{% if install_type == 'binary' %}
+
+RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
+    && /bin/false
+
+{% endif %}
+
+{% block solum_deployer_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER solum

@@ -1,0 +1,31 @@
+FROM {{ namespace }}/{{ image_prefix }}monasca-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block monasca_notification_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+
+RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
+    && /bin/false
+
+{% elif install_type == 'source' %}
+
+ADD monasca-notification-archive /monasca-notification-source
+
+{% set monasca_notification_pip_packages = [
+    '/monasca-notification'
+] %}
+
+RUN ln -s monasca-notification-source/* monasca-notification \
+    && {{ macros.install_pip(monasca_notification_pip_packages | customizable("pip_packages")) }}
+
+{% endif %}
+
+{% block monasca_notification_footer %}{% endblock %}
+
+{% block footer %}{% endblock %}
+
+USER monasca
+

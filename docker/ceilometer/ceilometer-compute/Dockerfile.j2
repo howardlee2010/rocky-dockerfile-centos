@@ -1,0 +1,46 @@
+FROM {{ namespace }}/{{ image_prefix }}ceilometer-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block ceilometer_compute_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set ceilometer_compute_packages = [
+            'openstack-ceilometer-compute',
+         ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set ceilometer_compute_packages = [
+            'ceilometer-agent-compute',
+            'python-libvirt'
+         ] %}
+    {% endif %}
+{{ macros.install_packages(ceilometer_compute_packages | customizable("packages")) }}
+
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set ceilometer_compute_packages = [
+            'libvirt-python'
+         ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set ceilometer_compute_packages = [
+            'python-libvirt'
+         ] %}
+    {% endif %}
+
+{{ macros.install_packages(ceilometer_compute_packages | customizable("packages")) }}
+
+# NOTE(jeffrey4l): just for back compatibility
+{% set ceilometer_compute_pip_packages = [] %}
+
+RUN {{ macros.install_pip(ceilometer_compute_pip_packages | customizable("pip_packages")) }}
+
+{% endif %}
+
+{% block ceilometer_compute_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+# NOTE(huikang): non-root user does not work with libvirt.sock.
+#                Need configuration in nova-libvirt container to allow
+#                USER ceilometer to access libvirt.sock

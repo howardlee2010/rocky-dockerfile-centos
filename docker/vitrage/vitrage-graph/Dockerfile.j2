@@ -1,0 +1,30 @@
+FROM {{ namespace }}/{{ image_prefix }}vitrage-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block vitrage_graph_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set vitrage_graph_packages = [
+            'openstack-vitrage-graph'
+        ] %}
+
+{{ macros.install_packages(vitrage_graph_packages | customizable("packages")) }}
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+
+RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
+    && /bin/false
+
+    {% endif %}
+
+{% endif %}
+
+{% block vitrage_graph_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER vitrage

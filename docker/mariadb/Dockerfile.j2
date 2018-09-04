@@ -1,0 +1,56 @@
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block mariadb_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='mysql') }}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set mariadb_packages = [
+        'expect',
+        'galera',
+        'hostname',
+        'mariadb',
+        'mariadb-server-galera',
+        'percona-xtrabackup',
+        'pv',
+        'rsync',
+        'tar'
+    ] %}
+
+{% elif base_distro in ['debian', 'ubuntu'] %}
+    {% set mariadb_packages = [
+        'expect'
+    ] %}
+    {% if base_distro == 'debian' %}
+        {% set mariadb_packages = mariadb_packages + [
+            'mariadb-server'
+        ] %}
+    {% else %}
+        {% set mariadb_packages = mariadb_packages + [
+            'mariadb-server',
+            'percona-xtrabackup'
+        ] %}
+    {% endif %}
+{% endif %}
+
+{{ macros.install_packages(mariadb_packages | customizable("packages")) }}
+
+COPY mariadb_sudoers /etc/sudoers.d/kolla_mariadb_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+COPY security_reset.expect /usr/local/bin/kolla_security_reset
+RUN chmod 755 /usr/local/bin/kolla_extend_start \
+    && chmod 755 /usr/local/bin/kolla_security_reset \
+    && chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/kolla_mariadb_sudoers \
+    && rm -rf /var/lib/mysql/*
+
+{% if base_distro in ['debian', 'ubuntu'] %}
+RUN mkdir -p /var/run/mysqld && chown mysql /var/run/mysqld && chmod 755 /var/run/mysqld
+{% endif %}
+{% block mariadb_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER mysql

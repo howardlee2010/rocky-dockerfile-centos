@@ -1,0 +1,23 @@
+FROM {{ namespace }}/{{ image_prefix }}swift-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block swift_object_expirer_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        # RDO packages swift-object-expirer in openstack-swift-proxy
+        {% set swift_object_expirer_packages = ['openstack-swift-proxy'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set swift_object_expirer_packages = ['swift-object'] %}
+    {% endif %}
+
+{{ macros.install_packages(swift_object_expirer_packages | customizable("packages")) }}
+
+{% endif %}
+
+{% block swift_object_expirer_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER swift

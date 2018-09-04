@@ -1,0 +1,39 @@
+FROM {{ namespace }}/{{ image_prefix }}swift-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block swift_proxy_server_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set swift_proxy_server_packages = [
+            'openstack-swift-proxy',
+            'python-ceilometermiddleware'
+        ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set swift_proxy_server_packages = [
+            'swift-proxy',
+            'python-ceilometermiddleware'
+        ] %}
+    {% endif %}
+
+{{ macros.install_packages(swift_proxy_server_packages | customizable("packages")) }}
+
+{% elif install_type == 'source' %}
+
+{% set swift_proxy_server_pip_packages = [
+    'ceilometermiddleware'
+] %}
+
+RUN {{ macros.install_pip(swift_proxy_server_pip_packages | customizable("pip_packages")) }}
+
+{% endif %}
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+RUN chmod 755 /usr/local/bin/kolla_extend_start
+
+{% block swift_proxy_server_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER swift

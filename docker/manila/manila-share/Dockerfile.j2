@@ -1,0 +1,44 @@
+FROM {{ namespace }}/{{ image_prefix }}manila-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block manila_share_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set manila_share_packages = [
+            'openstack-manila-share',
+            'ceph-common'
+        ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set manila_share_packages = [
+            'manila-share',
+            'ceph-common'
+        ] %}
+
+    {% endif %}
+
+{{ macros.install_packages(manila_share_packages | customizable("packages")) }}
+
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set manila_share_packages = [
+            'ceph-common'
+        ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set manila_share_packages = [
+            'ceph-common'
+        ] %}
+
+    {% endif %}
+
+{{ macros.install_packages(manila_share_packages | customizable("packages")) }}
+
+{% endif %}
+
+{% block manila_share_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER manila

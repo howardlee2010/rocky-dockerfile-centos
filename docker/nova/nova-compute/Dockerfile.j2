@@ -1,0 +1,148 @@
+FROM {{ namespace }}/{{ image_prefix }}nova-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block nova_compute_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set nova_compute_packages = [
+            'ceph-common',
+            'device-mapper-multipath',
+            'e2fsprogs',
+            'genisoimage',
+            'iscsi-initiator-utils',
+            'nfs-utils',
+            'openstack-nova-compute',
+            'openvswitch',
+            'parted',
+            'python-libguestfs',
+            'python-oslo-vmware',
+            'python-rtslib',
+            'sysfsutils',
+            'targetcli'
+        ] %}
+
+{{ macros.install_packages(nova_compute_packages | customizable("packages")) }}
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+
+        # ironic as workaround https://bugs.launchpad.net/packstack/+bug/1430388
+        {% set nova_compute_packages = [
+            'ceph-common',
+            'e2fsprogs',
+            'genisoimage',
+            'ironic-common',
+            'multipath-tools',
+            'nfs-common',
+            'nova-compute',
+            'openvswitch-switch',
+            'open-iscsi',
+            'parted',
+            'python-guestfs',
+            'python-ironicclient',
+            'python-oslo.vmware',
+            'python-rtslib-fb',
+            'sysfsutils',
+            'targetcli-fb'
+        ] %}
+
+        # systemd is needed to get python-guestfs installed
+        {% if base_distro == 'debian' %}
+            {% set nova_compute_packages = nova_compute_packages + [
+                'systemd/stretch-backports'
+            ] %}
+        {% endif %}
+
+{{ macros.install_packages(nova_compute_packages | customizable("packages")) }}
+
+RUN rm -f /etc/nova/nova-compute.conf
+
+    {% endif %}
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set nova_compute_packages = [
+            'ceph-common',
+            'device-mapper-multipath',
+            'dosfstools',
+            'e2fsprogs',
+            'genisoimage',
+            'iscsi-initiator-utils',
+            'libvirt-python',
+            'libosinfo',
+            'nfs-utils',
+            'openvswitch',
+            'parted',
+            'python-libguestfs',
+            'python-rtslib',
+            'qemu-img-ev',
+            'sysfsutils',
+            'targetcli'
+        ] %}
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+
+        {% set nova_compute_packages = [
+            'ceph-common',
+            'dosfstools',
+            'e2fsprogs',
+            'genisoimage',
+            'libosinfo-bin',
+            'multipath-tools',
+            'nfs-common',
+            'open-iscsi',
+            'parted',
+            'python-guestfs',
+            'python-libvirt',
+            'python-rtslib-fb',
+            'qemu-utils',
+            'targetcli-fb'
+        ] %}
+
+        {% if base_arch == "aarch64" %}
+            {% set nova_compute_packages = nova_compute_packages + [
+                'qemu-efi'
+            ] %}
+        {% endif %}
+
+        # systemd is needed to get python-guestfs installed
+        {% if base_distro == 'debian' %}
+            {% set nova_compute_packages = nova_compute_packages + [
+                'systemd/stretch-backports'
+            ] %}
+        {% endif %}
+
+RUN mkdir -p /etc/ceph
+
+    {% endif %}
+
+{{ macros.install_packages(nova_compute_packages | customizable("packages")) }}
+
+{% set nova_compute_pip_packages = [
+        'oslo-vmware'
+    ]
+%}
+
+{% set nova_compute_plugins_pip_packages = [
+    '/plugins/*'
+] %}
+
+ADD plugins-archive /
+RUN {{ macros.install_pip(nova_compute_pip_packages | customizable("pip_packages")) }} \
+    && if [ "$(ls /plugins)" ]; then \
+           {{ macros.install_pip(nova_compute_plugins_pip_packages) }}; \
+       fi
+
+{% endif %}
+
+COPY extend_start.sh /usr/local/bin/kolla_nova_extend_start
+RUN chmod 755 /usr/local/bin/kolla_nova_extend_start \
+    && rm -f /etc/machine-id
+
+{% block nova_compute_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER nova

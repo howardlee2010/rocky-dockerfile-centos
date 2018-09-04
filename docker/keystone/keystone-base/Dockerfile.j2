@@ -1,0 +1,96 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block keystone_base_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='keystone') }}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set keystone_base_packages = [
+            'httpd',
+            'mod_auth_mellon',
+            'mod_auth_openidc',
+            'mod_ssl',
+            'mod_wsgi',
+            'openstack-keystone',
+            'python2-ldappool',
+            'python-keystoneclient'
+        ] %}
+
+{{ macros.install_packages(keystone_base_packages | customizable("packages")) }}
+RUN mkdir -p /var/www/cgi-bin/keystone \
+    && cp -a /usr/bin/keystone-wsgi-public /var/www/cgi-bin/keystone/main \
+    && cp -a /usr/bin/keystone-wsgi-admin /var/www/cgi-bin/keystone/admin \
+    && sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
+    && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set keystone_base_packages = [
+            'apache2',
+            'keystone',
+            'libapache2-mod-auth-mellon',
+            'libapache2-mod-auth-openidc',
+            'libapache2-mod-wsgi',
+            'python-ldappool'
+        ] %}
+
+{{ macros.install_packages(keystone_base_packages | customizable("packages")) }}
+RUN mkdir -p /var/www/cgi-bin/keystone \
+    && cp -a /usr/bin/keystone-wsgi-public /var/www/cgi-bin/keystone/main \
+    && cp -a /usr/bin/keystone-wsgi-admin /var/www/cgi-bin/keystone/admin \
+    && echo > /etc/apache2/ports.conf \
+    && rm -f /etc/apache2/sites-enabled/keystone.conf
+
+    {% endif %}
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set keystone_base_packages = [
+            'httpd',
+            'mod_auth_mellon',
+            'mod_auth_openidc',
+            'mod_ssl',
+            'mod_wsgi',
+            'python2-ldappool'
+        ] %}
+{{ macros.install_packages(keystone_base_packages | customizable("packages")) }}
+RUN sed -i -r 's,^(Listen 80),#\1,' /etc/httpd/conf/httpd.conf \
+    && sed -i -r 's,^(Listen 443),#\1,' /etc/httpd/conf.d/ssl.conf
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set keystone_base_packages = [
+            'apache2',
+            'libapache2-mod-auth-mellon',
+            'libapache2-mod-auth-openidc',
+            'libapache2-mod-wsgi',
+            'python-ldappool'
+        ] %}
+{{ macros.install_packages(keystone_base_packages | customizable("packages")) }}
+RUN echo > /etc/apache2/ports.conf
+
+    {% endif %}
+
+{% block keystone_source_install %}
+ADD keystone-base-archive /keystone-base-source
+
+{% set keystone_base_pip_packages = [
+    '/keystone'
+] %}
+
+RUN ln -s keystone-base-source/* keystone \
+    && {{ macros.install_pip(keystone_base_pip_packages | customizable("pip_packages")) }} \
+    && mkdir -p /etc/keystone /var/www/cgi-bin/keystone \
+    && cp -r /keystone/etc/* /etc/keystone/ \
+    && cp /var/lib/kolla/venv/bin/keystone-wsgi-admin /var/www/cgi-bin/keystone/admin \
+    && cp /var/lib/kolla/venv/bin/keystone-wsgi-public /var/www/cgi-bin/keystone/main \
+    && chown -R keystone: /etc/keystone /var/www/cgi-bin/keystone
+{% endblock %}
+
+{% endif %}
+
+RUN chown -R keystone: /var/www/cgi-bin/keystone \
+    && chmod 755 /var/www/cgi-bin/keystone/*
+
+{% block keystone_base_footer %}{% endblock %}

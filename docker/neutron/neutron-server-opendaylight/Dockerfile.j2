@@ -1,0 +1,56 @@
+FROM {{ namespace }}/{{ image_prefix }}neutron-server:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+USER root
+
+{% block neutron_server_opendaylight_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% set neutron_server_opendaylight_packages = [
+        'python-networking-odl',
+        'python-networking-bgpvpn',
+        'python-networking-l2gw'
+    ] %}
+
+{% if base_distro in ['centos', 'rhel'] %}
+    {% set neutron_server_opendaylight_packages = neutron_server_opendaylight_packages + [
+        'python-networking-bgpvpn-heat'
+    ] %}
+{% endif %}
+
+{{ macros.install_packages(neutron_server_opendaylight_packages | customizable("packages")) }}
+
+{% elif install_type == 'source' %}
+
+    {% if base_arch not in ['x86_64'] %}
+        {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+            {% set neutron_server_opendaylight_packages = [
+                'libjpeg-devel'
+            ] %}
+        {% elif base_distro in ['debian', 'ubuntu'] %}
+            {% set neutron_server_opendaylight_packages = [
+                'libjpeg-dev'
+            ] %}
+        {% endif %}
+
+{{ macros.install_packages(neutron_server_opendaylight_packages | customizable("packages")) }}
+    {% endif %}
+
+ADD plugins-archive /
+
+{% set neutron_server_opendaylight_plugins_pip_packages = [
+    '/plugins/*'
+] %}
+
+RUN if [ "$(ls /plugins)" ]; then \
+        {{ macros.install_pip(neutron_server_opendaylight_plugins_pip_packages) }}; \
+    fi
+
+{% endif %}
+
+{% block neutron_server_opendaylight_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER neutron

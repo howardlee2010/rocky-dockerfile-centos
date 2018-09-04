@@ -1,0 +1,37 @@
+FROM {{ namespace }}/{{ image_prefix }}nova-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block nova_novncproxy_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set nova_novncproxy_packages = [
+            'novnc',
+            'openstack-nova-novncproxy'
+        ] %}
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+
+        {% set nova_novncproxy_packages = [
+            'nova-novncproxy'
+        ] %}
+
+    {% endif %}
+
+{% elif install_type == 'source' %}
+
+        {% set nova_novncproxy_packages = [
+            'novnc'
+        ] %}
+
+{% endif %}
+
+{{ macros.install_packages(nova_novncproxy_packages | customizable("packages")) }}
+
+{% block nova_novncproxy_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER nova

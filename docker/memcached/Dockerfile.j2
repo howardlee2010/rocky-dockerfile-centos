@@ -1,0 +1,16 @@
+FROM {{ namespace }}/{{ image_prefix }}base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block memcached_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='memcached', homedir='/run/memcache') }}
+
+{% set memcached_packages = ['memcached'] %}
+{{ macros.install_packages(memcached_packages | customizable("packages")) }}
+
+{% block memcached_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER memcached

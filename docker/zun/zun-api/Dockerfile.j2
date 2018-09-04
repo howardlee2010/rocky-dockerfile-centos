@@ -1,0 +1,17 @@
+FROM {{ namespace }}/{{ image_prefix }}zun-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block zun_api_header %}{% endblock %}
+
+{% if install_type == 'binary' %}
+
+RUN echo '{{ install_type }} not yet available for {{ base_distro }}' \
+    && /bin/false
+
+{% endif %}
+
+COPY extend_start.sh /usr/local/bin/kolla_zun_extend_start
+RUN chmod 755 /usr/local/bin/kolla_zun_extend_start
+
+{% block zun_api_footer %}{% endblock %}
+{% block footer %}{% endblock %}

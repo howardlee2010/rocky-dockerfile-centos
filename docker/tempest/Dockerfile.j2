@@ -1,0 +1,58 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block tempest_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='tempest') }}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set tempest_packages = ['openstack-tempest-all'] %}
+
+{{ macros.install_packages(tempest_packages | customizable("packages")) }}
+RUN ln -sf /usr/share/openstack-tempest /tempest
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set tempest_packages = ['tempest'] %}
+
+{{ macros.install_packages(tempest_packages | customizable("packages")) }}
+RUN ln -sf /var/lib/tempest /tempest
+
+    {% endif %}
+
+{% elif install_type == 'source' %}
+
+ADD tempest-archive /tempest-source
+ADD plugins-archive /
+
+{% set tempest_pip_packages = [
+    '/tempest'
+] %}
+
+{% set tempest_plugins_pip_packages = [
+    '/plugins/*'
+] %}
+
+# NOTE(Jeffrey4l): remove the tempest version constraint in the
+# upper-constrains.txt file. Otherwise, it will be failed.
+RUN ln -s tempest-source/* tempest \
+    && sed -i 's/^tempest===.*$//' requirements/upper-constraints.txt \
+    && {{ macros.install_pip(tempest_pip_packages | customizable("pip_packages")) }} \
+    && if [ "$(ls /plugins)" ]; then \
+        {{ macros.install_pip(tempest_plugins_pip_packages) }}; \
+       fi \
+    && mkdir -p /etc/tempest /var/log/tempest /etc/tempest/tempest_lock
+
+{% endif %}
+
+WORKDIR /tempest
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+RUN chmod 755 /usr/local/bin/kolla_extend_start
+
+{% block tempest_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER tempest

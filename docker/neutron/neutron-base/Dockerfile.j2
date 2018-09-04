@@ -1,0 +1,161 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block neutron_base_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='neutron') }}
+
+{% if base_distro in ['debian', 'ubuntu'] %}
+{{ macros.debian_haproxy_existing_user_fix() }}
+{% endif %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set neutron_base_packages = [
+            'keepalived',
+            'net-tools',
+            'radvd',
+            'openstack-neutron',
+            'openstack-neutron-fwaas',
+            'openstack-neutron-lbaas',
+            'openstack-neutron-ml2',
+            'openvswitch',
+            'python-networking-sfc',
+            'python-networking-vmware-nsx',
+            'python2-networking-baremetal',
+            'python2-openvswitch',
+            'python2-oslo-vmware'
+        ] %}
+
+    {% elif base_distro in ['debian'] %}
+
+        {% set neutron_base_packages = [
+            'iproute2',
+            'iputils-ping',
+            'keepalived',
+            'net-tools',
+            'radvd',
+            'neutron-plugin-ml2',
+            'neutron-server',
+            'openvswitch-switch',
+            'python-networking-sfc',
+            'python-networking-vmware-nsx',
+            'python-openvswitch',
+            'python-oslo.vmware'
+        ] %}
+
+    {% elif base_distro in ['ubuntu'] %}
+
+        {% set neutron_base_packages = [
+            'iproute2',
+            'iputils-ping',
+            'keepalived',
+            'net-tools',
+            'radvd',
+            'neutron-lbaas-common',
+            'neutron-plugin-ml2',
+            'neutron-server',
+            'openvswitch-switch',
+            'python-networking-sfc',
+            'python-neutron-fwaas',
+            'python-openvswitch',
+            'python-oslo.vmware',
+            'python-vmware-nsx'
+        ] %}
+
+    {% endif %}
+
+{{ macros.install_packages(neutron_base_packages | customizable("packages")) }}
+
+    {% if base_distro in ['debian', 'ubuntu'] %}
+
+RUN mkdir -p /usr/share/neutron \
+    && ln -s /etc/neutron/api-paste.ini /usr/share/neutron/api-paste.ini
+
+    {% endif %}
+
+{% elif install_type == 'source' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+
+        {% set neutron_base_packages = [
+            'conntrack-tools',
+            'dnsmasq',
+            'dnsmasq-utils',
+            'haproxy',
+            'ipset',
+            'keepalived',
+            'net-tools',
+            'openvswitch',
+            'python2-openvswitch',
+            'radvd',
+            'uuid'
+        ] %}
+
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+
+        {% set neutron_base_packages = [
+            'conntrack',
+            'dnsmasq',
+            'dnsmasq-utils',
+            'haproxy',
+            'iproute2',
+            'ipset',
+            'iptables',
+            'iputils-arping',
+            'iputils-ping',
+            'keepalived',
+            'net-tools',
+            'openvswitch-switch',
+            'python-openvswitch',
+            'radvd',
+            'uuid-runtime'
+        ] %}
+
+    {% endif %}
+
+{{ macros.install_packages(neutron_base_packages | customizable("packages")) }}
+
+ADD neutron-base-archive /neutron-base-source
+ADD plugins-archive /
+
+{% set neutron_base_pip_packages = [
+    '/neutron',
+    'oslo-vmware'
+] %}
+
+{% set neutron_base_plugins_pip_packages = [
+    '/plugins/*'
+] %}
+
+RUN ln -s neutron-base-source/* neutron \
+    && {{ macros.install_pip(neutron_base_pip_packages | customizable("pip_packages")) }} \
+    && mkdir -p /etc/neutron /usr/share/neutron \
+    && cp -r /neutron/etc/* /etc/neutron/ \
+    && cp -r /neutron/etc/neutron/* /etc/neutron/ \
+    && cp /neutron/etc/api-paste.ini /usr/share/neutron \
+    && mv /etc/neutron/neutron/ /etc/neutron/plugins/ \
+    && chown -R neutron: /etc/neutron /usr/share/neutron \
+    && sed -i 's|^exec_dirs.*|exec_dirs=/var/lib/kolla/venv/bin,/sbin,/usr/sbin,/bin,/usr/bin,/usr/local/bin,/usr/local/sbin|g' /etc/neutron/rootwrap.conf \
+    && if [ "$(ls /plugins)" ]; then \
+        {{ macros.install_pip(neutron_base_plugins_pip_packages) }} \
+        && for neutron_plugins in $(ls /plugins); do \
+            if [[ -d "/plugins/$neutron_plugins/etc/neutron/rootwrap.d" ]]; then \
+                cp /plugins/$neutron_plugins/etc/neutron/rootwrap.d/* /etc/neutron/rootwrap.d; \
+            fi; \
+        done; \
+    fi
+
+{% endif %}
+
+COPY neutron_sudoers /etc/sudoers.d/kolla_neutron_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+RUN chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/kolla_neutron_sudoers \
+    && touch /usr/local/bin/kolla_neutron_extend_start \
+    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_neutron_extend_start
+
+{% block neutron_base_footer %}{% endblock %}

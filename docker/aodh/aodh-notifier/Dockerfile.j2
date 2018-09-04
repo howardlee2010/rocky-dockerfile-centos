@@ -1,0 +1,20 @@
+FROM {{ namespace }}/{{ image_prefix }}aodh-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block aodh_notifier_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+       {% set aodh_notifier_packages = ['openstack-aodh-notifier'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set aodh_notifier_packages = ['aodh-notifier'] %}
+    {% endif %}
+{{ macros.install_packages(aodh_notifier_packages | customizable("packages")) }}
+
+{% endif %}
+{% block aodh_notifier_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER aodh

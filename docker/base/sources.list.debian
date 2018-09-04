@@ -1,0 +1,20 @@
+# Default repos
+deb http://deb.debian.org/debian stretch main
+
+# debian security updates
+deb http://security.debian.org/debian-security stretch/updates main
+
+# Linaro repo for Kolla
+# ceph, libvirt, opendaylight, openvswitch, qemu
+deb http://obs.linaro.org/ERP:/18.06/Debian_9/ ./
+
+deb [arch=amd64] https://packagecloud.io/grafana/stable/debian/ stretch main
+
+# Unofficial repository for grafana (LP: #1768585).
+deb [arch=arm64] https://dl.bintray.com/fg2it/deb-arm64/ stretch main
+
+# elasticsearch (arch:all), logstash (arch:all), kibana (arch:amd64)
+deb [arch=amd64] https://artifacts.elastic.co/packages/5.x/apt stable main
+
+# main docker repo
+deb https://download.docker.com/linux/debian stretch stable

@@ -1,0 +1,62 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block ceilometer_base_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='ceilometer') }}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set ceilometer_base_packages = [
+            'openstack-ceilometer-common',
+            'python-panko',
+            'python-gnocchiclient',
+            'python-oslo-db',
+            'python-tooz'
+         ] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set ceilometer_base_packages = [
+            'ceilometer-common',
+            'python-gnocchiclient',
+            'python-panko',
+            'python-pymongo'
+         ] %}
+    {% endif %}
+
+{{ macros.install_packages(ceilometer_base_packages | customizable("packages")) }}
+
+{% elif install_type == 'source' %}
+
+{% set ceilometer_base_pip_packages = [
+    '/ceilometer[gnocchi,mongo,mysql]'
+] %}
+
+{% set ceilometer_base_plugins_pip_packages = [
+    '/plugins/*'
+] %}
+
+ADD ceilometer-base-archive /ceilometer-base-source
+ADD plugins-archive /
+RUN ln -s ceilometer-base-source/* ceilometer \
+    && {{ macros.install_pip(ceilometer_base_pip_packages | customizable("pip_packages")) }} \
+    && mkdir -p /etc/ceilometer \
+    && cp -r /ceilometer/etc/ceilometer/* /etc/ceilometer/ \
+    && chown -R ceilometer: /etc/ceilometer \
+    && sed -i 's|^exec_dirs.*|exec_dirs=/var/lib/kolla/venv/bin,/sbin,/usr/sbin,/bin,/usr/bin,/usr/local/bin,/usr/local/sbin|g' /etc/ceilometer/rootwrap.conf \
+    && if [ "$(ls /plugins)" ]; then \
+        {{ macros.install_pip(ceilometer_base_plugins_pip_packages) }}; \
+    fi
+
+{% endif %}
+
+COPY ceilometer_sudoers /etc/sudoers.d/kolla_ceilometer_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+
+RUN chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/kolla_ceilometer_sudoers \
+    && touch /usr/local/bin/kolla_ceilometer_extend_start \
+    && chmod 755 /usr/local/bin/kolla_extend_start /usr/local/bin/kolla_ceilometer_extend_start
+
+{% block ceilometer_base_footer %}{% endblock %}

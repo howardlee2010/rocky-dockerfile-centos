@@ -1,0 +1,64 @@
+FROM {{ namespace }}/{{ image_prefix }}cinder-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block cinder_volume_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set cinder_volume_packages = [
+            'nfs-utils',
+            'python-rtslib',
+            'scsi-target-utils',
+            'sysfsutils',
+            'targetcli'
+    ] %}
+{{ macros.install_packages(cinder_volume_packages | customizable("packages")) }}
+
+{% block cinder_volume_redhat_setup %}
+RUN sed -i '1 i include /var/lib/cinder/volumes/*' /etc/tgt/tgtd.conf
+{% endblock %}
+
+{% elif base_distro in ['debian', 'ubuntu'] %}
+    {% set cinder_volume_packages = [
+            'nfs-common',
+            'sysfsutils',
+            'python-rtslib-fb',
+            'targetcli-fb',
+            'thin-provisioning-tools',
+            'tgt'
+    ] %}
+
+{{ macros.install_packages(cinder_volume_packages | customizable("packages")) }}
+
+{% block cinder_volume_ubuntu_setup %}
+RUN sed -i '1 i include /var/lib/cinder/volumes/*' /etc/tgt/targets.conf
+{% endblock %}
+
+{% endif %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['debian', 'ubuntu'] %}
+        {% set cinder_volume_packages = [
+                'cinder-volume',
+                'python-rtslib-fb',
+                'targetcli-fb',
+                'thin-provisioning-tools'
+        ] %}
+
+{{ macros.install_packages(cinder_volume_packages | customizable("packages")) }}
+    {% endif %}
+
+{% endif %}
+
+COPY cinder_sudoers /etc/sudoers.d/kolla_cinder_volume_sudoers
+COPY extend_start.sh /usr/local/bin/kolla_cinder_extend_start
+
+RUN chmod 750 /etc/sudoers.d \
+    && chmod 440 /etc/sudoers.d/kolla_cinder_volume_sudoers \
+    && chmod 755 /usr/local/bin/kolla_cinder_extend_start
+
+{% block cinder_volume_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER cinder

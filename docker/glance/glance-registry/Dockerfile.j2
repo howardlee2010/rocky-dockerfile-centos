@@ -1,0 +1,9 @@
+FROM {{ namespace }}/{{ image_prefix }}glance-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block glance_registry_header %}{% endblock %}
+
+{% block glance_registry_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER glance

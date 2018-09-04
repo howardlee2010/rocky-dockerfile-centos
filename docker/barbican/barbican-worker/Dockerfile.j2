@@ -1,0 +1,22 @@
+FROM {{ namespace }}/{{ image_prefix }}barbican-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block barbican_worker_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+       {% set barbican_worker_packages = ['openstack-barbican-worker'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+       {% set barbican_worker_packages = ['barbican-worker'] %}
+    {% endif %}
+
+{{ macros.install_packages(barbican_worker_packages | customizable("packages")) }}
+
+{% endif %}
+
+{% block barbican_worker_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER barbican

@@ -1,0 +1,22 @@
+FROM {{ namespace }}/{{ image_prefix }}swift-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block swift_account_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+        {% set swift_acount_packages = ['openstack-swift-account'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set swift_acount_packages = ['swift-account'] %}
+    {% endif %}
+
+{{ macros.install_packages(swift_acount_packages | customizable("packages")) }}
+
+{% endif %}
+
+{% block swift_account_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER swift

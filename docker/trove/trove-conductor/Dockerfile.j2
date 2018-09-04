@@ -1,0 +1,22 @@
+FROM {{ namespace }}/{{ image_prefix }}trove-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block trove_conductor_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+       {% set trove_conductor_packages = ['openstack-trove-conductor'] %}
+    {% elif base_distro in ['debian', 'ubuntu'] %}
+        {% set trove_conductor_packages = ['trove-conductor'] %}
+    {% endif %}
+
+{{ macros.install_packages(trove_conductor_packages | customizable("packages")) }}
+
+{% endif %}
+
+{% block trove_conductor_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER trove

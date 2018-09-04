@@ -1,0 +1,22 @@
+FROM {{ namespace }}/{{ image_prefix }}cinder-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block cinder_scheduler_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% if install_type == 'binary' %}
+    {% if base_distro in ['debian', 'ubuntu'] %}
+        {% set cinder_scheduler_packages = [
+                'cinder-scheduler'
+        ] %}
+
+{{ macros.install_packages(cinder_scheduler_packages | customizable("packages")) }}
+
+    {% endif %}
+{% endif %}
+
+{% block cinder_scheduler_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER cinder

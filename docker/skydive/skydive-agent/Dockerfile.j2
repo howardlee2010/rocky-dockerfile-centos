@@ -1,0 +1,18 @@
+FROM {{ namespace }}/{{ image_prefix }}skydive-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block skydive_agent_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{% block skydive_agent_install %}
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+    {% set skydive_agent_packages = ['openvswitch'] %}
+{% elif base_distro in ['debian', 'ubuntu'] %}
+    {% set skydive_agent_packages = ['openvswitch-common'] %}
+{% endif %}
+{{ macros.install_packages(skydive_agent_packages | customizable("packages")) }}
+{% endblock %}
+
+{% block skydive_agent_footer %}{% endblock %}
+{% block footer %}{% endblock %}

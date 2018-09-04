@@ -1,0 +1,62 @@
+FROM {{ namespace }}/{{ image_prefix }}openstack-base:{{ tag }}
+LABEL maintainer="{{ maintainer }}" name="{{ image_name }}" build-date="{{ build_date }}"
+
+{% block collectd_header %}{% endblock %}
+
+{% import "macros.j2" as macros with context %}
+
+{{ macros.configure_user(name='collectd') }}
+
+{% set collectd_packages = [
+    'collectd'
+] %}
+
+{% if base_distro in ['centos', 'oraclelinux', 'rhel'] %}
+  {% set collectd_packages = collectd_packages + [
+      'collectd-amqp1',
+      'collectd-apache',
+      'collectd-ceph',
+      'collectd-connectivity',
+      'collectd-disk',
+      'collectd-ipmi',
+      'collectd-mysql',
+      'collectd-netlink',
+      'collectd-ovs-events',
+      'collectd-ovs-stats',
+      'collectd-ping',
+      'collectd-procevent',
+      'collectd-python',
+      'collectd-smart',
+      'collectd-snmp-agent',
+      'collectd-sysevent',
+      'collectd-utils',
+      'collectd-virt',
+      'collectd-write_kafka',
+      'collectd-write_prometheus',
+      'python-collectd-gnocchi'
+  ] %}
+
+  {% if base_arch =='x86_64' %}
+      {% set collectd_packages = collectd_packages + [
+        'collectd-hugepages',
+        'collectd-rdt',
+        'collectd-turbostat'
+      ] %}
+
+  {% endif %}
+# make sure, collectd is pulled from centos-opstools
+RUN yum-config-manager --disable epel
+{% endif %}
+
+{{ macros.install_packages(collectd_packages | customizable("packages")) }}
+
+COPY extend_start.sh /usr/local/bin/kolla_extend_start
+RUN chmod 755 /usr/local/bin/kolla_extend_start \
+    && chown -R collectd /var/lib/collectd \
+    && chown -R collectd /etc/collectd* \
+    && chown -R collectd /var/run/
+
+{% block collectd_footer %}{% endblock %}
+{% block footer %}{% endblock %}
+
+USER collectd
